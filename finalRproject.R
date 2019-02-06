@@ -1,0 +1,415 @@
+
+## Install necessary packages
+```{r}
+suppressMessages(library(devtools))
+suppressMessages(library(ggplot2))
+suppressMessages(library(ggthemes))
+suppressMessages(library(dplyr))
+suppressMessages(library(memisc))
+suppressMessages(library(gridExtra))
+suppressMessages(library(RColorBrewer))
+suppressMessages(library(magrittr))
+suppressMessages(library(xtable))
+suppressMessages(library(knitr))
+suppressMessages(library(DT))
+suppressMessages(library(scales))
+suppressMessages(library(plotrix))
+suppressMessages(library(corrplot))
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+loanData <- read.csv('prosperLoanData.csv')
+```
+
+```{r}
+str(loanData)
+```
+
+
+## HOW LONG PEOPLE USUALLY OPT FOR LOAN?
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(sf)
+attach(loanData)
+
+loanData %>% 
+    ggplot(aes(x = Term / 12)) +
+        geom_histogram(binwidth = 1) +
+        theme_hc() + 
+        xlab('Term in Years') +
+        ylab('How many?') + 
+        scale_x_continuous(breaks = seq(1, 5, 2)) +
+        ggtitle("Distribution Loan Terms") +
+        theme(plot.title = element_text(face = 'bold.italic', 
+                                        colour = "black", size=18))
+```
+
+
+## Plotting the trend of different customer types
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+loanData.two_status <- loanData %>%
+    group_by(Term, LoanStatus) %>%
+    summarise(n = n())
+levels(loanData.two_status$LoanStatus) <-
+    c(levels(loanData.two_status$LoanStatus), "Other")
+loanData.two_status$LoanStatus[!(loanData.two_status$LoanStatus %in%
+                                     c("Completed", "Defaulted"))] <- "Other"
+
+loanData.two_status <- loanData.two_status %>%
+    group_by(Term, LoanStatus) %>%
+    summarise(p = n(), total = sum(n)) %>%
+    mutate(freq = round(total / sum(total) * 100, 2))
+
+ggplot(aes(x = Term / 12, y = freq, fill = LoanStatus), 
+       data = loanData.two_status) +
+    geom_bar(stat = 'identity', position="stack", color = 'black') + 
+    scale_x_continuous(breaks = c(1, 3, 5)) +
+    xlab('Loan term in years') + 
+  
+    ggtitle("LoanStatus: Completed vs Defaulted", 
+            subtitle = "for each loan Term") +
+    theme(plot.title = element_text(face = 'bold.italic', 
+                                    colour = '#F35E3A', size=18),
+          plot.subtitle = element_text(face = 'bold', 
+                                       colour = '#17b4ba', size=11)) +
+    ylab("% of Borrowers")
+```
+
+
+## Divide the customers into two groups-Good & Bad 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+loanData.gb <- loanData %>%
+    group_by(Term, LoanStatus) %>%
+    summarise(n = n()) %>%
+    mutate(customer_type = ifelse((LoanStatus == 'Current' | 
+                                   LoanStatus == 'Completed'| 
+                                   LoanStatus == 'FinalPaymentInProgress'),
+                                  'good', 'bad')) %>%
+    filter(LoanStatus != 'Cancelled') %>%
+    mutate(freq = n / sum(n) * 100) %>%
+    ungroup() %>%
+    group_by(Term, customer_type) %>%
+    summarise(n = sum(freq))
+```
+
+## But before that lets see the distribution of LonaStatus variable
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+loanData %>%
+    group_by(LoanStatus) %>%
+    summarise(n = n()) %>%
+    ggplot(aes(x = LoanStatus, y = n)) +
+    geom_bar(stat = 'identity', position="dodge") +
+    ylab("Number of borrowers") +
+    xlab("Different Loan Status") +
+    coord_flip()
+```
+
+## The bigger Picture
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x = Term / 12, y = n, fill = customer_type), data = loanData.gb) +
+    geom_bar(stat = 'identity', position="dodge") + 
+    xlab('Loan term in years') +
+    ylab('Percentage') +
+    scale_x_continuous(breaks = c(1, 3, 5)) +
+    geom_text(aes(label = sprintf("%2.1f%%", round(n, 2)), vjust = -.3), 
+              color="black") +
+    facet_wrap(~customer_type) +
+    scale_fill_hue() +
+    ggtitle("Good vs Bad", 
+            subtitle = "Number of good borrowes vs bad borrowers 
+in each loan Term") +
+    theme(plot.title = element_text(face = 'bold.italic', 
+                                    colour = '#333338', 
+                                    size=18),
+          plot.subtitle = element_text(face = 'bold', 
+                                       colour = '#6aa5e7', 
+                                       size=11))
+```
+
+
+## Distribution for some continuous/categorical features
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(gridExtra)
+library(ggplot2)
+library(dplyr)
+
+EmploymentStatusDurationHist <- ggplot(aes(x = EmploymentStatusDuration), 
+                                       data = loanData) +
+    geom_histogram(binwidth = 10, color = 'white') +
+    scale_x_continuous(breaks = seq(0, 400, 100), limits = c(0, 400)) +
+      xlab("Borrower Experience")
+
+
+StatedMonthlyIncomeHist <- ggplot(aes(x = StatedMonthlyIncome), 
+                                  data = loanData) +
+    geom_histogram(binwidth = 1000, color = 'white') +
+    scale_x_continuous(limits = c(0, 20000)) 
+
+MonthlyLoanPaymentHist <- ggplot(aes(x = MonthlyLoanPayment), 
+                                 data = loanData) +
+    geom_histogram(binwidth = 50, color = 'white') +
+    scale_x_continuous(breaks = seq(0, 1000, 300), limits = c(0, 1000)) 
+
+LoanOriginalAmountHist <- ggplot(aes(x = LoanOriginalAmount), 
+                                 data = loanData) +
+    geom_histogram(binwidth = 1000, color = 'white') +
+    scale_x_continuous(breaks = seq(0, 25000, 7000), limits = c(0, 25000)) 
+
+
+BorrowerAPRHist <- ggplot(aes(x = BorrowerAPR), 
+                          data = loanData) +
+    geom_histogram(binwidth = 0.01, color = 'white') +
+    scale_x_continuous(breaks = seq(0.07, 0.3, 0.05), limits = c(0.07, 0.3)) 
+
+BorrowerRateHist <- ggplot(aes(x = BorrowerRate), 
+                           data = loanData) +
+    geom_histogram(binwidth = 0.01, color = 'white') +
+    scale_x_continuous(breaks = seq(0.07, 0.3, 0.05), 
+                       limits = c(0.07, 0.3)) 
+
+DebtToIncomeRatioHist <- ggplot(aes(x = DebtToIncomeRatio), 
+                                data = loanData) +
+    geom_histogram(binwidth = 0.05, color = 'white') +
+    scale_x_continuous(limits = c(0.0, 0.7), 
+                       breaks = seq(0.0, 0.6, 0.1)) 
+
+grid.arrange(EmploymentStatusDurationHist,
+             StatedMonthlyIncomeHist,
+             MonthlyLoanPaymentHist,
+             LoanOriginalAmountHist,
+             BorrowerAPRHist,
+             BorrowerRateHist,
+             DebtToIncomeRatioHist,
+             ncol = 3, nrow = 3,
+             top = "Distribution of feature variables\n")
+    
+
+```
+
+
+## EstimatedEffectiveYield - A better measure for a successful Lender
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x = EstimatedEffectiveYield), data = loanData) +
+    geom_histogram(aes(y = ..density..), binwidth = 0.01, na.rm = T, 
+                   color = 'darkblue', fill = 'lightblue') +
+    scale_x_continuous(limits = c(-0.1, 0.5), 
+                       breaks = seq(-0.1, 0.5, 0.05)) +
+    geom_density(alpha=.2, fill="#FF6666", na.rm = T) + 
+    geom_vline(aes(xintercept=mean(EstimatedEffectiveYield, na.rm=T)), 
+               color="blue", linetype="dashed", size=1) +
+    ggtitle("Distribution of EstimatedEffectiveYield", 
+            subtitle = "with the mean axis") +
+    theme(plot.title = element_text(face = 'bold.italic', 
+                                    colour = '#FF6666', 
+                                    size=18),
+          plot.subtitle = element_text(face = 'bold', 
+                                       colour = 'darkblue', 
+                                       size=13))
+
+```
+
+
+## Does Lenders prefer borrowers with better Prosper Score ?
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+loanData$ProsperScore <- factor(loanData$ProsperScore)
+ggplot(aes(x = ProsperScore, y = EstimatedEffectiveYield, fill=ProsperScore), 
+       data = subset(loanData, !is.na(loanData$ProsperScore) & 
+                         !is.na(loanData$EstimatedEffectiveYield))) +
+    geom_violin(trim = F, scale = "width") +
+    stat_summary(fun.y=median, geom="point", size=2, color="black") +
+    scale_fill_manual(values=colorRampPalette(c("pink", "lightgreen"))(11)) + 
+    theme_minimal() +
+    ylab('Effective yeild of Lenders') +
+    ggtitle("Effective Yield for each Risk Factors",
+            subtitle = "story of lenders preference") +
+    theme(plot.title = element_text(face = 'bold.italic', 
+                                    colour = '#f3b0c0', 
+                                    size=22),
+          plot.subtitle = element_text(face = 'bold', 
+                                       colour = 'darkgreen', 
+                                       size=14)) +
+    guides(fill = F)
+```
+
+## we get an interesting trend
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.height=5, fig.width=14}
+
+borrower_apr <- ggplot(aes(x = ProsperScore, 
+                           y = BorrowerAPR), 
+       data = subset(loanData, !is.na(loanData$ProsperScore) & 
+                         !is.na(loanData$BorrowerAPR))) +
+    geom_boxplot() 
+
+borrower_rate <- ggplot(aes(x = ProsperScore, 
+                            y = BorrowerRate), 
+       data = subset(loanData, !is.na(loanData$ProsperScore) & 
+                         !is.na(loanData$BorrowerRate))) +
+    geom_boxplot() 
+grid.arrange(borrower_apr, borrower_rate, 
+             nrow = 1, ncol = 2,
+             top = "Interest Rate Distributions")
+```
+
+## Distribution of Listing Category
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.height=7, fig.width=10}
+loanData %>%
+    group_by(ListingCategory..numeric.) %>%
+    summarise(n = n()) %>%
+    ggplot(aes(x = ListingCategory..numeric., y = n)) +
+    geom_bar(stat = 'identity', position="dodge") +
+    scale_x_continuous(breaks = seq(0, 20, 1)) +
+    scale_y_continuous(breaks = seq(0, 60000, 5000)) +
+    xlab("Listing Category") +
+    ylab("Number of borrowers") +
+    ggtitle("Distribution of ListingCategory")
+
+```
+
+## Who are others??
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+other.borrowers <- loanData %>%
+    filter(ListingCategory..numeric. == 7) %>%
+    group_by(EmploymentStatus, Occupation) %>%
+    summarise(n = n()) %>%
+    filter(!is.na(Occupation)) %>%
+    ungroup() %>%
+    arrange(EmploymentStatus, desc(n)) %>%
+    ungroup() %>%
+    group_by(EmploymentStatus) %>%
+    top_n(n = 5, wt = n) %>%
+    ungroup()
+```
+
+## Does experienced people opt for loan lesser ?
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.height=4, fig.width=11}
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(ggthemes)
+borrower.experience <- loanData %>%
+    filter(!is.na(EmploymentStatusDuration))
+
+hist1 <- ggplot(aes(x = EmploymentStatusDuration / 12), 
+                data = borrower.experience) +
+         geom_histogram(binwidth = 1, 
+                        color = 'red', 
+                        fill = 'deeppink', 
+                        alpha = 1/2) +
+         theme_pander() +
+         scale_x_continuous(breaks = 
+                        seq(min(borrower.experience$EmploymentStatusDuration),
+                        max(borrower.experience$EmploymentStatusDuration),
+                                        2)) +
+         coord_cartesian(xlim = c(0, 41)) +
+         xlab('\nTotal experience in years') +
+         ggtitle("Loans for Experienced people",
+                 subtitle = "actual distribution") +
+        theme(plot.title = element_text(face = 'bold.italic', 
+                                        colour = 'deeppink', 
+                                        size=20),
+          plot.subtitle = element_text(face = 'bold', 
+                                       colour = 'black', 
+                                       size=14))
+
+duration <- loanData %>%
+    filter(!is.na(EmploymentStatusDuration)) %>%
+    mutate(EmploymentStatusDuration = round(EmploymentStatusDuration / 12, 0)) %>%
+    group_by(EmploymentStatusDuration) %>%
+    summarise(n = n()) %>%
+    mutate(freq = n / sum(n) * 100) %>%
+    top_n(n = 5, wt = freq)
+
+
+hist2<- 
+    ggplot(aes(x = reorder(EmploymentStatusDuration, -freq), y = freq, fill = freq), 
+           data = duration) +
+        geom_bar(stat = 'identity', position="dodge",
+             color = 'white') +
+         theme_pander() +
+    scale_fill_continuous_tableau(palette = "Blue") +
+    guides(fill = F) +
+    ggtitle("Loans for Experienced people",
+                 subtitle = "top 5 experience levels") +
+    theme(plot.title = element_text(face = 'bold.italic', 
+                                        colour = 'darkslategrey', 
+                                        size=20),
+          plot.subtitle = element_text(face = 'bold', 
+                                       colour = 'black', 
+                                       size=14)) +
+    xlab("Top 5 experience levels in years") +
+    ylab("% of borrowers")
+grid.arrange(hist1, hist2, ncol = 2, nrow = 1) 
+
+```
+    
+
+
+
+
+
+
+## Other Correlations
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(corrplot)
+d <- data.frame(Term=loanData$Term,
+                BorrowerAPR=loanData$BorrowerAPR,
+                BorrowerRate=loanData$BorrowerRate,
+                LenderYield=loanData$LenderYield,
+                EffectiveYield = loanData$EstimatedEffectiveYield,
+                Loss = loanData$EstimatedLoss,
+                Duration = loanData$EmploymentStatusDuration,
+                income = loanData$StatedMonthlyIncome,
+                payment = loanData$MonthlyLoanPayment)
+d[is.na(d)] <- 0
+d <- round(cor(d[sapply(d, is.numeric)]), 2)
+corrplot(d, method = "circle")
+
+```
+
+
+## How people take loan for their Homes ?
+
+##Here we are going to explore the people for two category. 
+
+##    1. First those who are opting for loan to rennovation of home when they have a house.
+ ##   2. Second those who opt for home loans even though they don't have house.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+home.loans <- loanData %>%
+    filter(ListingCategory..numeric. == 2, 
+           ProsperRating..Alpha. != "", 
+           IsBorrowerHomeowner != "") %>%
+    group_by(IsBorrowerHomeowner, ProsperRating..Alpha.) %>%
+    summarise(n = n()) %>%
+    mutate(freq = round(n / sum(n) * 100, 2))
+levels(home.loans$IsBorrowerHomeowner) <- c('No Home', 'Has Home')
+home.loans$ProsperRating..Alpha. <- 
+    factor(home.loans$ProsperRating..Alpha., ordered = T,
+           levels = c('AA', 'A', 'B', 'C', 'D', 'E', 'HR'))
+home.loans <- arrange(home.loans, ProsperRating..Alpha.)
+```
+##**Now let's plot the data**
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x = ProsperRating..Alpha., y = freq, 
+           fill = IsBorrowerHomeowner), data = home.loans) +
+    geom_bar(stat = 'identity', position="dodge",
+             color = 'white') +
+    scale_fill_hue() +
+    xlab('Prosper Ratings for borrowers') +
+    ylab('% of borrowers') +
+    ggtitle("Home Improvement for All", 
+            subtitle = "even if you dont have home") +
+    theme(plot.title = element_text(face = 'bold.italic', 
+                                    colour = 'red', 
+                                    size=20),
+          plot.subtitle = element_text(face = 'bold', 
+                                       colour = 'dodgerblue3', 
+                                       size=14))
+```
