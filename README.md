@@ -20,7 +20,7 @@ your loan so investors can decide whether to fund it.
 
 5.memisc
 
-6.gridextra
+6.gridExtra
 
 7.RColorBrewer
 
