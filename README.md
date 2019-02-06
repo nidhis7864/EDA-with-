@@ -9,13 +9,23 @@ your loan so investors can decide whether to fund it.
 
 
 # Dependent Packages
+
 1.ggplt2
+
 2.ggthemes
+
 3.dplyr
+
 4.reshape2
+
 5.memisc
+
 6.gridextra
+
 7.RColorBrewer
+
 8.plotrix
+
 9.DT
+
 10.scales
